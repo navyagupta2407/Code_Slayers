@@ -13,6 +13,8 @@ dist/
 dist-ssr/
 build/
 *.local
+.vite/
+coverage/
 
 # Python
 __pycache__/
