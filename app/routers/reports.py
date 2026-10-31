@@ -27,18 +27,36 @@ def create_report(
     user=Depends(get_current_user)
 ):
     try:
+        disaster_type_map = {
+    "flood": "Flood",
+    "storm": "Storm",
+    "landslide": "Landslide",
+    "heatwave": "Heatwave",
+    "other": "Other"
+}
+
+        severity_map = {
+    "low": "Low",
+    "moderate": "Medium",
+    "medium": "Medium",
+    "high": "High"
+}
+
         payload = {
-            "user_id": user["id"],
-            "title": report.title or f"{report.incident_type.title()} report",
-            "description": report.description,
-            "disaster_type": report.incident_type,
-            "location": report.location or (
-                f"{report.latitude}, {report.longitude}"
-            ),
-            "latitude": report.latitude,
-            "longitude": report.longitude,
-            "severity": report.severity or "moderate"
-        }
+    "user_id": user["id"],
+    "title": report.title or f"{report.incident_type.title()} report",
+    "description": report.description,
+    "disaster_type": disaster_type_map[report.incident_type],
+    "location": report.location or (
+        f"{report.latitude}, {report.longitude}"
+    ),
+    "latitude": report.latitude,
+    "longitude": report.longitude,
+    "severity": severity_map.get(
+        (report.severity or "moderate").lower(),
+        "Medium"
+    )
+}
 
         result = (
             supabase.table("reports")
