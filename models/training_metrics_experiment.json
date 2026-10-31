@@ -1,0 +1,27 @@
+{
+    "architecture": "MobileNetV3-Small",
+    "training_epochs": 5,
+    "training_images": 15113,
+    "validation_images": 1589,
+    "test_images": 1380,
+    "best_validation_macro_f1": 0.5449198799635441,
+    "test_metrics": {
+        "accuracy": 0.7079710144927536,
+        "precision": 0.8501971090670171,
+        "recall": 0.6912393162393162,
+        "f1": 0.7625220978196818,
+        "macro_f1": 0.6917031937828418,
+        "roc_auc": 0.7758575883575884,
+        "confusion_matrix": [
+            [
+                330,
+                114
+            ],
+            [
+                289,
+                647
+            ]
+        ],
+        "loss": 0.5744305748006572
+    }
+}

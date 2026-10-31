@@ -1,0 +1,14 @@
+
+Pillow
+ImageHash
+torch
+torchvision
+exifread
+fastapi
+uvicorn
+python-multipart
+numpy
+pytest
+httpx
+
+email-validator

@@ -1,0 +1,10 @@
+[
+    {
+        "reference_id": "HIST_001",
+        "image_path": "test_data/historical/old_flood.jpg",
+        "event_name": "Sample Historical Flood Event",
+        "event_date": "2023-07-10",
+        "location": "Punjab, India",
+        "source": "synthetic_test_reference"
+    }
+]
