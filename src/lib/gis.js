@@ -4,24 +4,85 @@
 ========================================= */
 
 export const statuses = [
-  'all',
-  'verified',
-  'pending',
-  'rejected'
+  "all",
+  "verified",
+  "pending",
+  "rejected"
 ];
 
 export const disasterTypes = [
-  'all',
-  'flood',
-  'waterlogging',
-  'storm',
-  'rain',
-  'landslide'
+  "all",
+  "flood",
+  "waterlogging",
+  "storm",
+  "rain",
+  "landslide"
 ];
 
 
 /* =========================================
-   2. VALIDATE GPS COORDINATES
+   2. DATA NORMALIZATION
+   Supports frontend and backend schemas
+========================================= */
+
+export function normalizeIncident(item = {}) {
+
+  const duplicateEvidence = Array.isArray(
+    item.duplicate_evidence
+  )
+    ? item.duplicate_evidence
+    : [];
+
+  const duplicateCount =
+    typeof item.duplicate_report_count === "number" &&
+    Number.isFinite(item.duplicate_report_count)
+      ? item.duplicate_report_count
+      : duplicateEvidence.length;
+
+  return {
+
+    ...item,
+
+    id:
+      item.id ??
+      item.canonical_incident_id ??
+      item.incident_id ??
+      "",
+
+    title:
+      item.title ??
+      item.incident_title ??
+      item.incident_type ??
+      item.disaster_type ??
+      "Untitled incident",
+
+    disaster_type:
+      item.disaster_type ??
+      item.incident_type ??
+      "unknown",
+
+    verification_status:
+      item.verification_status ??
+      item.status ??
+      "pending",
+
+    report_count:
+      typeof item.report_count === "number" &&
+      Number.isFinite(item.report_count)
+        ? item.report_count
+        : 0,
+
+    duplicate_report_count: duplicateCount,
+
+    state: item.state ?? "Unknown"
+
+  };
+
+}
+
+
+/* =========================================
+   3. VALIDATE GPS COORDINATES
 ========================================= */
 
 export function hasValidCoords(item) {
@@ -32,74 +93,103 @@ export function hasValidCoords(item) {
   const lng = item.longitude;
 
   return (
-    typeof lat === 'number' &&
+
+    typeof lat === "number" &&
     Number.isFinite(lat) &&
     lat >= -90 &&
     lat <= 90 &&
 
-    typeof lng === 'number' &&
+    typeof lng === "number" &&
     Number.isFinite(lng) &&
     lng >= -180 &&
     lng <= 180
+
   );
+
 }
 
 
 /* =========================================
-   3. FILTER INCIDENTS
+   4. FILTER INCIDENTS
 ========================================= */
 
 export function filterIncidents(
-  items,
+  items = [],
   {
-    status = 'all',
-    type = 'all',
-    state = 'all',
-    search = '',
+    status = "all",
+    type = "all",
+    state = "all",
+    search = "",
     minConfidence = 0
   } = {}
 ) {
 
-  const query = search.trim().toLowerCase();
+  const query = String(search).trim().toLowerCase();
 
-  return items.filter((incident) => {
+  const rawThreshold = Number(minConfidence) || 0;
 
-    // Verification status filter
+  // Support both 30 and 0.30.
+  const threshold = Math.max(
+    0,
+    Math.min(
+      1,
+      rawThreshold > 1
+        ? rawThreshold / 100
+        : rawThreshold
+    )
+  );
+
+  return items.filter((originalIncident) => {
+
+    const incident = normalizeIncident(
+      originalIncident
+    );
+
+    // Verification status.
     const statusMatches =
-      status === 'all' ||
+      status === "all" ||
       incident.verification_status === status;
 
-
-    // Disaster type filter
+    // Disaster type.
     const typeMatches =
-      type === 'all' ||
-      incident.disaster_type === type;
+      type === "all" ||
+      incident.disaster_type?.toLowerCase() ===
+        type.toLowerCase();
 
-
-    // State filter
+    // State.
     const stateMatches =
-      state === 'all' ||
-      incident.state === state;
+      state === "all" ||
+      incident.state?.trim().toLowerCase() ===
+        state.trim().toLowerCase();
 
+    // Search by title, ID, description, state or district.
+    const searchableText = [
 
-    // Search filter
+      incident.title,
+      incident.id,
+      incident.description,
+      incident.state,
+      incident.district,
+      incident.disaster_type
+
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
     const searchMatches =
       !query ||
-      `${incident.title || ''} ${incident.id || ''} ${incident.description || ''}`
-        .toLowerCase()
-        .includes(query);
+      searchableText.includes(query);
 
-
-    // AI confidence filter
+    // AI confidence.
     const confidenceMatches =
-      minConfidence === 0 ||
+      threshold === 0 ||
       (
-        typeof incident.ai_confidence === 'number' &&
-        incident.ai_confidence >= minConfidence
+        typeof incident.ai_confidence === "number" &&
+        Number.isFinite(incident.ai_confidence) &&
+        incident.ai_confidence >= threshold
       );
 
-
-    // Final filtering condition
     return (
       statusMatches &&
       typeMatches &&
@@ -109,37 +199,47 @@ export function filterIncidents(
     );
 
   });
+
 }
 
 
 /* =========================================
-   4. DASHBOARD SUMMARY
+   5. DASHBOARD SUMMARY
 ========================================= */
 
-export function summary(items) {
+export function summary(items = []) {
+
+  const normalizedItems = items.map(
+    normalizeIncident
+  );
 
   return {
 
-    incidents: items.length,
+    // Canonical incidents.
+    incidents: normalizedItems.length,
 
-    reports: items.reduce(
+    // Total citizen submissions.
+    reports: normalizedItems.reduce(
       (sum, item) =>
-        sum + (item.report_count || 0),
+        sum + item.report_count,
       0
     ),
 
-    duplicates: items.reduce(
+    // Additional linked reports.
+    duplicates: normalizedItems.reduce(
       (sum, item) =>
-        sum + (item.duplicate_report_count || 0),
+        sum + item.duplicate_report_count,
       0
     ),
 
-    verified: items.filter(
+    // Verified incidents.
+    verified: normalizedItems.filter(
       item =>
-        item.verification_status === 'verified'
+        item.verification_status === "verified"
     ).length,
 
-    unlocated: items.filter(
+    // Incidents without valid GPS coordinates.
+    unlocated: normalizedItems.filter(
       item => !hasValidCoords(item)
     ).length
 
@@ -149,40 +249,49 @@ export function summary(items) {
 
 
 /* =========================================
-   5. CONFIDENCE PERCENTAGE
+   6. CONFIDENCE PERCENTAGE
 ========================================= */
 
 export function confidencePercent(value) {
 
   if (
-    typeof value !== 'number' ||
+    typeof value !== "number" ||
     !Number.isFinite(value)
   ) {
-    return 'Unknown';
+    return "Unknown";
   }
 
+  // Accept decimal or percentage input.
+  const normalized = value > 1
+    ? value / 100
+    : value;
+
   return `${Math.round(
-    Math.max(0, Math.min(1, value)) * 100
+    Math.max(0, Math.min(1, normalized)) * 100
   )}%`;
 
 }
 
 
 /* =========================================
-   6. DATE FORMATTING
+   7. DATE FORMATTING
 ========================================= */
 
 export function formatDate(iso) {
 
+  if (!iso) return "Unknown";
+
   const date = new Date(iso);
 
   if (Number.isNaN(date.getTime())) {
-    return 'Unknown';
+    return "Unknown";
   }
 
-  return date.toLocaleString('en-IN', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
+  return date.toLocaleString("en-IN", {
+
+    dateStyle: "medium",
+    timeStyle: "short"
+
   });
 
 }

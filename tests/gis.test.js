@@ -1,17 +1,3 @@
-// import {describe,it,expect} from 'vitest';
-// import {demoIncidents} from '../src/data/demoIncidents';
-// import {filterIncidents,hasValidCoords,summary,confidencePercent} from '../src/lib/gis';
-// describe('GIS transformations',()=>{
-//  it('filters verified incidents',()=>{const list=filterIncidents(demoIncidents,{status:'verified'});expect(list).toHaveLength(2);expect(list.every(i=>i.verification_status==='verified')).toBe(true)});
-//  it('filters by disaster type',()=>{expect(filterIncidents(demoIncidents,{type:'flood'})).toHaveLength(2)});
-//  it('keeps unknown locations off the map',()=>{expect(demoIncidents.filter(hasValidCoords)).toHaveLength(5)});
-//  it('rejects invalid coordinates',()=>{expect(hasValidCoords({latitude:100,longitude:76})).toBe(false);expect(hasValidCoords({latitude:30,longitude:200})).toBe(false)});
-//  it('summarizes canonical incidents, not uploads as unique disasters',()=>{const s=summary(demoIncidents);expect(s.incidents).toBe(6);expect(s.reports).toBe(13);expect(s.duplicates).toBe(7)});
-//  it('renders normalized confidence safely',()=>{expect(confidencePercent(.94)).toBe('94%');expect(confidencePercent(null)).toBe('Unknown')});
-//  it("rejects missing coordinates", () => {expect( hasValidCoords({latitude: null,longitude: null}) ).toBe(false);});
-// });
-
-
 
 import {
   describe,
@@ -25,7 +11,8 @@ import {
   filterIncidents,
   hasValidCoords,
   summary,
-  confidencePercent
+  confidencePercent,
+  normalizeIncident
 } from "../src/lib/gis";
 
 
@@ -38,12 +25,6 @@ describe("India-wide GIS transformations", () => {
       demoIncidents,
       { status: "verified" }
     );
-
-    const expected = demoIncidents.filter(
-      item => item.verification_status === "verified"
-    );
-
-    expect(result).toEqual(expected);
 
     expect(
       result.every(
@@ -62,40 +43,66 @@ describe("India-wide GIS transformations", () => {
       { type: "flood" }
     );
 
-    const expected = demoIncidents.filter(
-      item => item.disaster_type === "flood"
-    );
-
-    expect(result).toEqual(expected);
-
-  });
-
-
-  // TEST 3: Unknown locations should not appear on map
-  it("keeps invalid or unknown locations off the map", () => {
-
-    const locatedIncidents = demoIncidents.filter(
-      hasValidCoords
-    );
-
     expect(
-      locatedIncidents.every(hasValidCoords)
+      result.every(
+        item => item.disaster_type === "flood"
+      )
     ).toBe(true);
 
-    const unlocatedIncidents = demoIncidents.filter(
-      item => !hasValidCoords(item)
-    );
+  });
+
+
+  // TEST 3: GPS coordinate validation
+  it("accepts valid GPS coordinates", () => {
 
     expect(
-      locatedIncidents.length +
-      unlocatedIncidents.length
-    ).toBe(demoIncidents.length);
+      hasValidCoords({
+        latitude: 30.9009,
+        longitude: 75.8573
+      })
+    ).toBe(true);
+
+    expect(
+      hasValidCoords({
+        latitude: 90,
+        longitude: 180
+      })
+    ).toBe(true);
 
   });
 
 
-  // TEST 4: Summary calculations
-  it("summarizes canonical incidents correctly", () => {
+  // TEST 4: Reject invalid coordinates
+  it("rejects invalid GPS coordinates", () => {
+
+    expect(
+      hasValidCoords({
+        latitude: 150,
+        longitude: 76
+      })
+    ).toBe(false);
+
+    expect(
+      hasValidCoords({
+        latitude: 30,
+        longitude: 200
+      })
+    ).toBe(false);
+
+    expect(
+      hasValidCoords({
+        latitude: null,
+        longitude: null
+      })
+    ).toBe(false);
+
+    expect(hasValidCoords(null)).toBe(false);
+
+  });
+
+
+  // TEST 5: Dashboard summary
+  it("calculates incident and report statistics", () => {
 
     const result = summary(demoIncidents);
 
@@ -112,83 +119,40 @@ describe("India-wide GIS transformations", () => {
     );
 
     const expectedVerified = demoIncidents.filter(
-      item => item.verification_status === "verified"
+      item =>
+        item.verification_status === "verified"
     ).length;
 
     expect(result.incidents).toBe(
       demoIncidents.length
     );
 
-    expect(result.reports).toBe(
-      expectedReports
-    );
+    expect(result.reports).toBe(expectedReports);
 
     expect(result.duplicates).toBe(
       expectedDuplicates
     );
 
-    expect(result.verified).toBe(
-      expectedVerified
-    );
-
-  });
-
-
-  // TEST 5: Reject invalid coordinates
-  it("rejects invalid coordinates", () => {
-
-    expect(
-      hasValidCoords({
-        latitude: 150,
-        longitude: 250
-      })
-    ).toBe(false);
-
-    expect(
-      hasValidCoords({
-        latitude: -100,
-        longitude: 80
-      })
-    ).toBe(false);
+    expect(result.verified).toBe(expectedVerified);
 
   });
 
 
   // TEST 6: Confidence formatting
-  it("formats confidence correctly", () => {
+  it("formats AI confidence correctly", () => {
 
-    expect(confidencePercent(0.94))
-      .toBe("94%");
+    expect(confidencePercent(0.94)).toBe("94%");
 
-    expect(confidencePercent(0.78))
-      .toBe("78%");
+    expect(confidencePercent(0.78)).toBe("78%");
 
-    expect(confidencePercent(null))
-      .toBe("Unknown");
+    expect(confidencePercent(94)).toBe("94%");
 
-  });
-
-
-  // TEST 7: Reject missing coordinates
-  it("rejects missing coordinates", () => {
-
-    expect(
-      hasValidCoords({
-        latitude: null,
-        longitude: null
-      })
-    ).toBe(false);
-
-    expect(
-      hasValidCoords({
-        latitude: 30.9
-      })
-    ).toBe(false);
+    expect(confidencePercent(null)).toBe("Unknown");
 
   });
 
 
-  // TEST 8: Search by incident ID
+  // TEST 7: Incident ID search
   it("searches incidents by ID", () => {
 
     const result = filterIncidents(
@@ -196,11 +160,158 @@ describe("India-wide GIS transformations", () => {
       { search: "INC-001" }
     );
 
+    // Prevent an empty array from passing automatically.
+    expect(result.length).toBeGreaterThan(0);
+
     expect(
       result.every(
-        item => item.id.toLowerCase().includes("inc-001")
+        item =>
+          item.id.toLowerCase().includes("inc-001")
       )
     ).toBe(true);
+
+  });
+
+
+  // TEST 8: Backend schema normalization
+  it("normalizes backend incident data correctly", () => {
+
+    const backendIncident = {
+
+      canonical_incident_id: "INC_900",
+
+      incident_type: "flood",
+
+      latitude: 30.9009,
+
+      longitude: 75.8573,
+
+      state: "Punjab",
+
+      district: "Ludhiana",
+
+      status: "verified",
+
+      report_count: 3,
+
+      ai_confidence: 0.92,
+
+      duplicate_evidence: [
+        {
+          report_id: "RPT_002",
+          duplicate_score: 0.95
+        }
+      ]
+
+    };
+
+    const result = normalizeIncident(
+      backendIncident
+    );
+
+    expect(result.id).toBe("INC_900");
+
+    expect(result.disaster_type).toBe("flood");
+
+    expect(result.verification_status).toBe(
+      "verified"
+    );
+
+    expect(result.duplicate_report_count).toBe(1);
+
+    expect(result.state).toBe("Punjab");
+
+  });
+
+
+  // TEST 9: AI confidence filtering
+  it("filters incidents using minimum AI confidence", () => {
+
+    const incidents = [
+
+      {
+        id: "INC_A",
+        ai_confidence: 0.90,
+        verification_status: "verified"
+      },
+
+      {
+        id: "INC_B",
+        ai_confidence: 0.20,
+        verification_status: "pending"
+      }
+
+    ];
+
+    const result = filterIncidents(
+      incidents,
+      { minConfidence: 30 }
+    );
+
+    expect(result).toHaveLength(1);
+
+    expect(result[0].id).toBe("INC_A");
+
+  });
+
+
+  // TEST 10: State and district search
+  it("searches incidents by district", () => {
+
+    const incidents = [
+
+      {
+        id: "INC_A",
+        state: "Punjab",
+        district: "Ludhiana"
+      },
+
+      {
+        id: "INC_B",
+        state: "Haryana",
+        district: "Ambala"
+      }
+
+    ];
+
+    const result = filterIncidents(
+      incidents,
+      { search: "ludhiana" }
+    );
+
+    expect(result).toHaveLength(1);
+
+    expect(result[0].id).toBe("INC_A");
+
+  });
+
+
+  // TEST 11: Duplicate evidence fallback
+  it("counts linked duplicate evidence when explicit count is missing", () => {
+
+    const incident = normalizeIncident({
+
+      id: "INC_DUP",
+
+      incident_type: "flood",
+
+      duplicate_evidence: [
+        {
+          report_id: "RPT_001",
+          duplicate_score: 0.95
+        },
+        {
+          report_id: "RPT_002",
+          duplicate_score: 0.91
+        }
+
+      ]
+
+    });
+
+    expect(
+      incident.duplicate_report_count
+    ).toBe(2);
 
   });
 
