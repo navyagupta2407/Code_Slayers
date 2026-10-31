@@ -217,3 +217,279 @@ export const demoIncidents = [
 }
 
 ];
+
+/* =========================================
+   NATIONWIDE SYNTHETIC DEMO DATA
+   Additional 25 records:
+   18 missing states/territories + 7 UTs
+========================================= */
+
+const nationwideDemoSeeds = [
+
+  // 18 missing states
+
+  {
+    city: "Visakhapatnam",
+    district: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    latitude: 17.6868,
+    longitude: 83.2185,
+    disaster_type: "cyclone"
+  },
+  {
+    city: "Itanagar",
+    district: "Papum Pare",
+    state: "Arunachal Pradesh",
+    latitude: 27.0844,
+    longitude: 93.6053,
+    disaster_type: "landslide"
+  },
+  {
+    city: "Raipur",
+    district: "Raipur",
+    state: "Chhattisgarh",
+    latitude: 21.2514,
+    longitude: 81.6296,
+    disaster_type: "heatwave"
+  },
+  {
+    city: "Panaji",
+    district: "North Goa",
+    state: "Goa",
+    latitude: 15.4909,
+    longitude: 73.8278,
+    disaster_type: "storm"
+  },
+  {
+    city: "Ahmedabad",
+    district: "Ahmedabad",
+    state: "Gujarat",
+    latitude: 23.0225,
+    longitude: 72.5714,
+    disaster_type: "heatwave"
+  },
+  {
+    city: "Gurugram",
+    district: "Gurugram",
+    state: "Haryana",
+    latitude: 28.4595,
+    longitude: 77.0266,
+    disaster_type: "waterlogging"
+  },
+  {
+    city: "Ranchi",
+    district: "Ranchi",
+    state: "Jharkhand",
+    latitude: 23.3441,
+    longitude: 85.3096,
+    disaster_type: "flood"
+  },
+  {
+    city: "Kochi",
+    district: "Ernakulam",
+    state: "Kerala",
+    latitude: 9.9312,
+    longitude: 76.2673,
+    disaster_type: "flood"
+  },
+  {
+    city: "Bhopal",
+    district: "Bhopal",
+    state: "Madhya Pradesh",
+    latitude: 23.2599,
+    longitude: 77.4126,
+    disaster_type: "drought"
+  },
+  {
+    city: "Imphal",
+    district: "Imphal West",
+    state: "Manipur",
+    latitude: 24.8170,
+    longitude: 93.9368,
+    disaster_type: "landslide"
+  },
+  {
+    city: "Shillong",
+    district: "East Khasi Hills",
+    state: "Meghalaya",
+    latitude: 25.5788,
+    longitude: 91.8933,
+    disaster_type: "rain"
+  },
+  {
+    city: "Aizawl",
+    district: "Aizawl",
+    state: "Mizoram",
+    latitude: 23.7271,
+    longitude: 92.7176,
+    disaster_type: "storm"
+  },
+  {
+    city: "Kohima",
+    district: "Kohima",
+    state: "Nagaland",
+    latitude: 25.6751,
+    longitude: 94.1086,
+    disaster_type: "landslide"
+  },
+  {
+    city: "Bhubaneswar",
+    district: "Khordha",
+    state: "Odisha",
+    latitude: 20.2961,
+    longitude: 85.8245,
+    disaster_type: "cyclone"
+  },
+  {
+    city: "Gangtok",
+    district: "Gangtok",
+    state: "Sikkim",
+    latitude: 27.3314,
+    longitude: 88.6138,
+    disaster_type: "landslide"
+  },
+  {
+    city: "Agartala",
+    district: "West Tripura",
+    state: "Tripura",
+    latitude: 23.8315,
+    longitude: 91.2868,
+    disaster_type: "flood"
+  },
+  {
+    city: "Lucknow",
+    district: "Lucknow",
+    state: "Uttar Pradesh",
+    latitude: 26.8467,
+    longitude: 80.9462,
+    disaster_type: "heatwave"
+  },
+  {
+    city: "Dehradun",
+    district: "Dehradun",
+    state: "Uttarakhand",
+    latitude: 30.3165,
+    longitude: 78.0322,
+    disaster_type: "landslide"
+  },
+
+  // 7 missing Union Territories
+
+  {
+    city: "Sri Vijaya Puram",
+    district: "South Andaman",
+    state: "Andaman and Nicobar Islands",
+    latitude: 11.6234,
+    longitude: 92.7265,
+    disaster_type: "cyclone"
+  },
+  {
+    city: "Chandigarh",
+    district: "Chandigarh",
+    state: "Chandigarh",
+    latitude: 30.7333,
+    longitude: 76.7794,
+    disaster_type: "rain"
+  },
+  {
+    city: "Silvassa",
+    district: "Dadra and Nagar Haveli",
+    state: "Dadra and Nagar Haveli and Daman and Diu",
+    latitude: 20.2766,
+    longitude: 73.0083,
+    disaster_type: "storm"
+  },
+  {
+    city: "New Delhi",
+    district: "New Delhi",
+    state: "Delhi",
+    latitude: 28.6139,
+    longitude: 77.2090,
+    disaster_type: "heatwave"
+  },
+  {
+    city: "Leh",
+    district: "Leh",
+    state: "Ladakh",
+    latitude: 34.1526,
+    longitude: 77.5771,
+    disaster_type: "coldwave"
+  },
+  {
+    city: "Kavaratti",
+    district: "Lakshadweep",
+    state: "Lakshadweep",
+    latitude: 10.5667,
+    longitude: 72.6417,
+    disaster_type: "cyclone"
+  },
+  {
+    city: "Puducherry",
+    district: "Puducherry",
+    state: "Puducherry",
+    latitude: 11.9416,
+    longitude: 79.8083,
+    disaster_type: "storm"
+  }
+
+];
+
+const demoStatuses = [
+  "pending",
+  "verified",
+  "rejected"
+];
+
+const demoSeverities = [
+  "high",
+  "medium",
+  "low"
+];
+
+const demoConfidences = [
+  0.88,
+  0.76,
+  0.93,
+  0.69,
+  0.84
+];
+
+// Generate synthetic demonstration incidents.
+demoIncidents.push(
+  ...nationwideDemoSeeds.map((seed, index) => ({
+
+    id: `INC-${String(index + 18).padStart(3, "0")}`,
+
+    title: `${seed.disaster_type} demonstration - ${seed.city}`,
+
+    description:
+      "Synthetic demonstration record for GIS testing. Not a real disaster alert.",
+
+    ...seed,
+
+    verification_status:
+      demoStatuses[index % demoStatuses.length],
+
+    ai_confidence:
+      demoConfidences[index % demoConfidences.length],
+
+    location_confidence: 0.80,
+
+    location_source: "demo_city_center",
+
+    severity:
+      demoSeverities[index % demoSeverities.length],
+
+    report_count: 1 + (index % 4),
+
+    duplicate_report_count: index % 3,
+
+    created_at: new Date(
+      Date.UTC(2026, 9, 31, 12 + index, 0, 0)
+    ).toISOString(),
+
+    reports: []
+
+  }))
+);
+

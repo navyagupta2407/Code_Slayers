@@ -16,16 +16,80 @@ export const disasterTypes = [
   "waterlogging",
   "storm",
   "rain",
-  "landslide"
+  "landslide",
+  "cyclone",
+  "earthquake",
+  "wildfire",
+  "drought",
+  "tsunami",
+  "heatwave",
+  "coldwave"
 ];
 
 
 /* =========================================
-   2. DATA NORMALIZATION
-   Supports frontend and backend schemas
+   2. HELPER FUNCTIONS
+========================================= */
+
+function normalizeText(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+// Normalize AI confidence to decimal format.
+function normalizeConfidence(value) {
+
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value)
+  ) {
+    return null;
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      1,
+      value > 1 ? value / 100 : value
+    )
+  );
+
+}
+
+// Safely normalize report counts.
+function normalizeCount(value) {
+
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value)
+  ) {
+    return 0;
+  }
+
+  return Math.floor(Math.max(0, value));
+
+}
+
+// Check whether an item is a valid object.
+function isValidRecord(item) {
+
+  return (
+    item !== null &&
+    typeof item === "object" &&
+    !Array.isArray(item)
+  );
+
+}
+
+
+/* =========================================
+   3. DATA NORMALIZATION
 ========================================= */
 
 export function normalizeIncident(item = {}) {
+
+  if (!isValidRecord(item)) {
+    item = {};
+  }
 
   const duplicateEvidence = Array.isArray(
     item.duplicate_evidence
@@ -33,48 +97,69 @@ export function normalizeIncident(item = {}) {
     ? item.duplicate_evidence
     : [];
 
+  const rawId =
+    item.id ??
+    item.canonical_incident_id ??
+    item.incident_id ??
+    "";
+
+  const rawTitle =
+    item.title ??
+    item.incident_title ??
+    item.incident_type ??
+    item.disaster_type ??
+    "Untitled incident";
+
   const duplicateCount =
     typeof item.duplicate_report_count === "number" &&
     Number.isFinite(item.duplicate_report_count)
-      ? item.duplicate_report_count
+      ? normalizeCount(item.duplicate_report_count)
       : duplicateEvidence.length;
 
   return {
 
     ...item,
 
-    id:
-      item.id ??
-      item.canonical_incident_id ??
-      item.incident_id ??
-      "",
+    // Incident identification.
+    id: String(rawId),
 
-    title:
-      item.title ??
-      item.incident_title ??
-      item.incident_type ??
-      item.disaster_type ??
-      "Untitled incident",
+    title: String(rawTitle),
 
-    disaster_type:
+    // Disaster classification.
+    disaster_type: normalizeText(
       item.disaster_type ??
       item.incident_type ??
-      "unknown",
+      "unknown"
+    ),
 
-    verification_status:
+    // Verification status.
+    verification_status: normalizeText(
       item.verification_status ??
       item.status ??
-      "pending",
+      "pending"
+    ),
 
-    report_count:
-      typeof item.report_count === "number" &&
-      Number.isFinite(item.report_count)
-        ? item.report_count
-        : 0,
+    // Geographic information.
+    state:
+      String(item.state ?? "").trim() || "Unknown",
+
+    // Report statistics.
+    report_count: normalizeCount(
+      item.report_count
+    ),
 
     duplicate_report_count: duplicateCount,
 
-    state: item.state ?? "Unknown"
+    duplicate_evidence: duplicateEvidence,
+
+    // AI confidence normalization.
+    ai_confidence: normalizeConfidence(
+      item.ai_confidence
+    ),
+
+    location_confidence: normalizeConfidence(
+      item.location_confidence
+    )
 
   };
 
@@ -82,12 +167,14 @@ export function normalizeIncident(item = {}) {
 
 
 /* =========================================
-   3. VALIDATE GPS COORDINATES
+   4. VALIDATE GPS COORDINATES
 ========================================= */
 
 export function hasValidCoords(item) {
 
-  if (!item) return false;
+  if (!isValidRecord(item)) {
+    return false;
+  }
 
   const lat = item.latitude;
   const lng = item.longitude;
@@ -110,36 +197,63 @@ export function hasValidCoords(item) {
 
 
 /* =========================================
-   4. FILTER INCIDENTS
+   5. FILTER INCIDENTS
 ========================================= */
 
 export function filterIncidents(
   items = [],
-  {
+  options = {}
+) {
+
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  const filters =
+    isValidRecord(options) ? options : {};
+
+  const {
     status = "all",
     type = "all",
     state = "all",
     search = "",
     minConfidence = 0
-  } = {}
-) {
+  } = filters;
 
-  const query = String(search).trim().toLowerCase();
+  const query = normalizeText(search);
 
-  const rawThreshold = Number(minConfidence) || 0;
+  const selectedStatus =
+    normalizeText(status) || "all";
+
+  const selectedType =
+    normalizeText(type) || "all";
+
+  const selectedState =
+    normalizeText(state) || "all";
 
   // Support both 30 and 0.30.
+  const rawThreshold = Number(minConfidence);
+
+  const safeThreshold = Number.isFinite(rawThreshold)
+    ? rawThreshold
+    : 0;
+
   const threshold = Math.max(
     0,
     Math.min(
       1,
-      rawThreshold > 1
-        ? rawThreshold / 100
-        : rawThreshold
+      safeThreshold > 1
+        ? safeThreshold / 100
+        : safeThreshold
     )
   );
 
   return items.filter((originalIncident) => {
+
+    // Ignore malformed records.
+    if (!isValidRecord(originalIncident)) {
+      return false;
+    }
 
     const incident = normalizeIncident(
       originalIncident
@@ -147,22 +261,20 @@ export function filterIncidents(
 
     // Verification status.
     const statusMatches =
-      status === "all" ||
-      incident.verification_status === status;
+      selectedStatus === "all" ||
+      incident.verification_status === selectedStatus;
 
     // Disaster type.
     const typeMatches =
-      type === "all" ||
-      incident.disaster_type?.toLowerCase() ===
-        type.toLowerCase();
+      selectedType === "all" ||
+      incident.disaster_type === selectedType;
 
     // State.
     const stateMatches =
-      state === "all" ||
-      incident.state?.trim().toLowerCase() ===
-        state.trim().toLowerCase();
+      selectedState === "all" ||
+      normalizeText(incident.state) === selectedState;
 
-    // Search by title, ID, description, state or district.
+    // Search.
     const searchableText = [
 
       incident.title,
@@ -182,12 +294,13 @@ export function filterIncidents(
       searchableText.includes(query);
 
     // AI confidence.
+    const confidence = incident.ai_confidence;
+
     const confidenceMatches =
       threshold === 0 ||
       (
-        typeof incident.ai_confidence === "number" &&
-        Number.isFinite(incident.ai_confidence) &&
-        incident.ai_confidence >= threshold
+        confidence !== null &&
+        confidence >= threshold
       );
 
     return (
@@ -204,18 +317,20 @@ export function filterIncidents(
 
 
 /* =========================================
-   5. DASHBOARD SUMMARY
+   6. DASHBOARD SUMMARY
 ========================================= */
 
 export function summary(items = []) {
 
-  const normalizedItems = items.map(
-    normalizeIncident
-  );
+  const normalizedItems = (
+    Array.isArray(items) ? items : []
+  )
+    .filter(isValidRecord)
+    .map(normalizeIncident);
 
   return {
 
-    // Canonical incidents.
+    // Total canonical incidents.
     incidents: normalizedItems.length,
 
     // Total citizen submissions.
@@ -249,37 +364,31 @@ export function summary(items = []) {
 
 
 /* =========================================
-   6. CONFIDENCE PERCENTAGE
+   7. CONFIDENCE PERCENTAGE
 ========================================= */
 
 export function confidencePercent(value) {
 
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value)
-  ) {
+  const normalized = normalizeConfidence(value);
+
+  if (normalized === null) {
     return "Unknown";
   }
 
-  // Accept decimal or percentage input.
-  const normalized = value > 1
-    ? value / 100
-    : value;
-
-  return `${Math.round(
-    Math.max(0, Math.min(1, normalized)) * 100
-  )}%`;
+  return `${Math.round(normalized * 100)}%`;
 
 }
 
 
 /* =========================================
-   7. DATE FORMATTING
+   8. DATE FORMATTING
 ========================================= */
 
 export function formatDate(iso) {
 
-  if (!iso) return "Unknown";
+  if (!iso) {
+    return "Unknown";
+  }
 
   const date = new Date(iso);
 

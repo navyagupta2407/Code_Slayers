@@ -17,6 +17,60 @@ import {
 
 
 describe("India-wide GIS transformations", () => {
+  
+it("covers all 28 states and 8 union territories", () => {
+
+  const expectedRegions = [
+    "Andhra Pradesh",
+    "Arunachal Pradesh",
+    "Assam",
+    "Bihar",
+    "Chhattisgarh",
+    "Goa",
+    "Gujarat",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jharkhand",
+    "Karnataka",
+    "Kerala",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Manipur",
+    "Meghalaya",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Punjab",
+    "Rajasthan",
+    "Sikkim",
+    "Tamil Nadu",
+    "Telangana",
+    "Tripura",
+    "Uttar Pradesh",
+    "Uttarakhand",
+    "West Bengal",
+    "Andaman and Nicobar Islands",
+    "Chandigarh",
+    "Dadra and Nagar Haveli and Daman and Diu",
+    "Delhi",
+    "Jammu and Kashmir",
+    "Ladakh",
+    "Lakshadweep",
+    "Puducherry"
+  ];
+
+  const availableRegions = new Set(
+    demoIncidents.map(item => item.state)
+  );
+
+  const missingRegions = expectedRegions.filter(
+    region => !availableRegions.has(region)
+  );
+
+  expect(missingRegions).toEqual([]);
+
+});
+
 
   // TEST 1: Verified incident filtering
   it("filters verified incidents correctly", () => {
