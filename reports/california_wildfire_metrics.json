@@ -1,0 +1,52 @@
+{
+    "event": "california_wildfires",
+    "split": "validation",
+    "total_images": 1589,
+    "successfully_evaluated": 1589,
+    "failed_images": 0,
+    "accuracy": 0.5865,
+    "macro_f1": 0.5741,
+    "roc_auc": 0.6828,
+    "correct_predictions": 932,
+    "false_positives": 132,
+    "false_negatives": 525,
+    "confusion_matrix": [
+        [
+            330,
+            132
+        ],
+        [
+            525,
+            602
+        ]
+    ],
+    "classification_report": {
+        "not_informative": {
+            "precision": 0.38596491228070173,
+            "recall": 0.7142857142857143,
+            "f1-score": 0.5011389521640092,
+            "support": 462.0
+        },
+        "informative": {
+            "precision": 0.8201634877384196,
+            "recall": 0.5341614906832298,
+            "f1-score": 0.646963997850618,
+            "support": 1127.0
+        },
+        "accuracy": 0.5865324103209566,
+        "macro avg": {
+            "precision": 0.6030642000095607,
+            "recall": 0.6242236024844721,
+            "f1-score": 0.5740514750073136,
+            "support": 1589.0
+        },
+        "weighted avg": {
+            "precision": 0.6939207301163518,
+            "recall": 0.5865324103209566,
+            "f1-score": 0.604565526417507,
+            "support": 1589.0
+        }
+    },
+    "failed_image_details": [],
+    "label_warning": "CrisisMMD informativeness annotations are associated with tweet informativeness. They are not independent image-only ground truth."
+}

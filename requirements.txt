@@ -1,0 +1,8 @@
+Pillow
+ImageHash
+torch
+transformers
+exifread
+fastapi
+uvicorn
+python-multipart

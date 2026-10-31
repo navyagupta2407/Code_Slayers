@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Environment and secrets
+.env
+.env.*
+
+# Raw datasets
+datasets/raw/
+
+# Large model checkpoints
+models/*.pth
+models/*.pt
+
+# Local duplicate registry
+data/image_registry.json
+data/image_registry_backup.json
+
+# Temporary uploads
+uploads/
+temp/
+
+# Generated error sample images
+reports/california_error_samples/
+
+# Local caches
+.cache/
