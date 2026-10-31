@@ -1,12 +1,10 @@
-
-from pathlib import Path
+﻿from pathlib import Path
 from io import BytesIO
 import logging
 import tempfile
 import uuid
 
 from PIL import Image, UnidentifiedImageError
-
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from starlette.concurrency import run_in_threadpool
 
@@ -16,11 +14,6 @@ from ai_engine.image_registry import (
     register_image
 )
 
-
-# ------------------------------------------
-# CONFIGURATION
-# ------------------------------------------
-
 app = FastAPI(
     title="SATYAMAP AI API",
     description="Crowdsourced Extreme Weather Verification and GIS De-Duplicator",
@@ -29,40 +22,23 @@ app = FastAPI(
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {
-    ".jpg", ".jpeg", ".png", ".webp"
-}
-
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 
-
-# ------------------------------------------
-# RESPONSE PATH SANITIZATION
-# ------------------------------------------
 
 def sanitize_image_paths(data, filename):
     if isinstance(data, dict):
         return {
-            key: (
-                filename
-                if key == "image_path"
-                else sanitize_image_paths(value, filename)
-            )
+            key: filename if key == "image_path"
+            else sanitize_image_paths(value, filename)
             for key, value in data.items()
         }
 
     if isinstance(data, list):
-        return [
-            sanitize_image_paths(item, filename)
-            for item in data
-        ]
+        return [sanitize_image_paths(item, filename) for item in data]
 
     return data
 
-
-# ------------------------------------------
-# HOME
-# ------------------------------------------
 
 @app.get("/")
 def home():
@@ -73,86 +49,44 @@ def home():
     }
 
 
-# ------------------------------------------
-# HEALTH CHECK
-# ------------------------------------------
-
 @app.get("/health")
 def health_check():
-    return {
-        "status": "healthy",
-        "service": "SATYAMAP AI"
-    }
+    return {"status": "healthy", "service": "SATYAMAP AI"}
 
-
-# ------------------------------------------
-# IMAGE ANALYSIS
-# ------------------------------------------
 
 @app.post("/analyze")
 async def analyze_image(
     file: UploadFile = File(...),
     claimed_location: str = Form(default=None)
 ):
-
     filename = Path(file.filename or "uploaded_image").name
     extension = Path(filename).suffix.lower()
 
     if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported image format."
-        )
+        raise HTTPException(400, "Unsupported image format.")
 
     temp_path = None
 
     try:
-
-        # 1. Read and validate upload size
-
         contents = await file.read(MAX_UPLOAD_SIZE + 1)
 
         if not contents:
-            raise HTTPException(
-                status_code=400,
-                detail="Uploaded file is empty."
-            )
+            raise HTTPException(400, "Uploaded file is empty.")
 
         if len(contents) > MAX_UPLOAD_SIZE:
-            raise HTTPException(
-                status_code=413,
-                detail="Image exceeds the maximum upload size of 10 MB."
-            )
-
-        # 2. Validate actual image content
+            raise HTTPException(413, "Image exceeds the maximum upload size of 10 MB.")
 
         try:
             with Image.open(BytesIO(contents)) as image:
                 image.verify()
-
         except (UnidentifiedImageError, OSError, ValueError):
-            raise HTTPException(
-                status_code=400,
-                detail="Uploaded file is not a valid image."
-            )
+            raise HTTPException(400, "Uploaded file is not a valid image.")
 
-        # 3. Save temporary image
-
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=extension
-        ) as temp_file:
-
+        with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as temp_file:
             temp_file.write(contents)
             temp_path = Path(temp_file.name)
 
-        # 4. Load existing image hashes
-
-        existing_images = await run_in_threadpool(
-            load_image_registry
-        )
-
-        # 5. Run complete AI analysis
+        existing_images = await run_in_threadpool(load_image_registry)
 
         result = await run_in_threadpool(
             analyze_evidence,
@@ -161,72 +95,31 @@ async def analyze_image(
             claimed_location=claimed_location
         )
 
-        # 6. Handle duplicate registration
+        duplicate_result = result.get("duplicate_detection", {})
+        duplicate_detected = duplicate_result.get("duplicate_detected", False)
 
-        duplicate_result = result.get(
-            "duplicate_detection", {}
-        )
-
-        duplicate_detected = duplicate_result.get(
-            "duplicate_detected", False
-        )
-
-        if duplicate_detected:
-
-            # Reuse the original matching submission ID.
-            original_id = duplicate_result["matches"][0]["report_id"]
-
-            submission_id = str(original_id)
-
+        if duplicate_detected and duplicate_result.get("matches"):
+            submission_id = str(duplicate_result["matches"][0]["report_id"])
             duplicate_result["new_image_registered"] = False
-
         else:
-
-            # Register a new image only once.
             submission_id = str(uuid.uuid4())
-
-            await run_in_threadpool(
-                register_image,
-                temp_path,
-                submission_id
-            )
-
+            await run_in_threadpool(register_image, temp_path, submission_id)
             duplicate_result["new_image_registered"] = True
 
-        # 7. Prepare final response
-
-        result = sanitize_image_paths(
-            result,
-            filename
-        )
-
+        result = sanitize_image_paths(result, filename)
         result["submission_id"] = submission_id
-
         result["duplicate_detection"]["registry_size"] = (
-            len(existing_images)
-            if duplicate_detected
-            else len(existing_images) + 1
+            len(existing_images) if duplicate_detected else len(existing_images) + 1
         )
 
         return result
 
     except HTTPException:
         raise
-
     except Exception:
-
-        logger.exception(
-            "SATYAMAP AI image analysis failed"
-        )
-
-        raise HTTPException(
-            status_code=500,
-            detail="Image analysis failed. Please try again."
-        )
-
+        logger.exception("SATYAMAP AI image analysis failed")
+        raise HTTPException(500, "Image analysis failed. Please try again.")
     finally:
-
         if temp_path and temp_path.exists():
             temp_path.unlink()
-
         await file.close()

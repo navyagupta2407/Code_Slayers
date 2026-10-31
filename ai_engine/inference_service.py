@@ -20,6 +20,27 @@ ALLOWED_FORMATS = {
 }
 
 
+def sanitize_image_paths(data, safe_path):
+    """Replace internal temporary image paths recursively."""
+    if isinstance(data, dict):
+        return {
+            key: (
+                safe_path
+                if key == "image_path"
+                else sanitize_image_paths(value, safe_path)
+            )
+            for key, value in data.items()
+        }
+
+    if isinstance(data, list):
+        return [
+            sanitize_image_paths(item, safe_path)
+            for item in data
+        ]
+
+    return data
+
+
 def analyze_report(
     image_bytes: bytes,
     description: str,
@@ -28,13 +49,6 @@ def analyze_report(
 ) -> dict:
     """
     Backend-compatible SATYAMAP AI inference interface.
-
-    Accepts image bytes and runs the existing evidence pipeline.
-
-    Description is accepted for backend compatibility but is
-    not currently used by the image-only classification model.
-
-    Returns a JSON-compatible evidence analysis dictionary.
     """
 
     if not isinstance(image_bytes, bytes) or not image_bytes:
@@ -50,7 +64,6 @@ def analyze_report(
 
     try:
         # 1. Validate actual image content
-
         try:
             with Image.open(BytesIO(image_bytes)) as image:
                 image_format = image.format
@@ -64,34 +77,34 @@ def analyze_report(
                 image.verify()
 
         except (UnidentifiedImageError, OSError) as exc:
-            raise ValueError("Uploaded data is not a valid image.") from exc
-
-        # 2. Create temporary image file
+            raise ValueError(
+                "Uploaded data is not a valid image."
+            ) from exc
 
         extension = ALLOWED_FORMATS[image_format]
 
+        # 2. Create temporary image file
         with tempfile.NamedTemporaryFile(
             delete=False,
             suffix=extension
         ) as temp_file:
-
             temp_file.write(image_bytes)
             temp_path = Path(temp_file.name)
 
-        # 3. Run existing AI evidence pipeline
-
+        # 3. Run AI evidence pipeline
         result = analyze_evidence(
             image_path=temp_path,
             existing_images=existing_images,
             claimed_location=claimed_location
         )
 
-        # 4. Remove internal temporary path from response
-
-        result["image_path"] = f"uploaded_image{extension}"
+        # 4. Sanitize temporary paths, including nested results
+        result = sanitize_image_paths(
+            result,
+            f"uploaded_image{extension}"
+        )
 
         # 5. Include model input context
-
         result["input_context"] = {
             "description_received": bool(description),
             "description_used_for_prediction": False
@@ -105,6 +118,5 @@ def analyze_report(
 
     finally:
         # 6. Always remove temporary image
-
         if temp_path and temp_path.exists():
             temp_path.unlink()

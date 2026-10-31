@@ -1,0 +1,52 @@
+import os
+import secrets
+
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header
+from starlette.concurrency import run_in_threadpool
+
+from ai_engine.inference_service import analyze_report
+
+router = APIRouter()
+
+
+@router.post("/analyze")
+async def analyze(
+    file: UploadFile = File(...),
+    report_id: str = Form(None),
+    description: str = Form(""),
+    claimed_location: str = Form(None),
+    authorization: str = Header(None)
+):
+    # Optional shared-token authentication
+    expected_token = os.getenv("AI_SERVICE_TOKEN")
+
+    if expected_token:
+        supplied_token = (
+            authorization.removeprefix("Bearer ").strip()
+            if authorization else ""
+        )
+
+        if not secrets.compare_digest(supplied_token, expected_token):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+    image_bytes = await file.read()
+    await file.close()
+
+    try:
+        result = await run_in_threadpool(
+            analyze_report,
+            image_bytes,
+            description,
+            claimed_location
+        )
+
+        return result
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="AI evidence analysis failed"
+        )
