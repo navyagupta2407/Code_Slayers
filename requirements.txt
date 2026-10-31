@@ -1,8 +1,12 @@
+
 Pillow
 ImageHash
 torch
-transformers
+torchvision
 exifread
 fastapi
 uvicorn
 python-multipart
+numpy
+pytest
+httpx
