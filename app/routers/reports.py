@@ -1,62 +1,68 @@
-﻿import hashlib
+﻿
+import hashlib
+import logging
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.auth import get_current_user, require_roles
 from app.database import supabase
 from app.schemas import ReportCreate, ModerationDecision
-from app.services.storage import validate_image
 from app.services.audit import log_action
+from app.services.storage import validate_image
 
-
-import logging
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/reports", tags=["Disaster Reports"])
+
+router = APIRouter(
+    prefix="/api/v1/reports",
+    tags=["Disaster Reports"],
+)
 
 BUCKET = "report-media"
+MAX_FILE_SIZE = 10 * 1024 * 1024
+
+DISASTER_TYPE_MAP = {
+    "flood": "Flood",
+    "storm": "Storm",
+    "landslide": "Landslide",
+    "heatwave": "Heatwave",
+    "other": "Other",
+}
+
+SEVERITY_MAP = {
+    "low": "Low",
+    "moderate": "Medium",
+    "medium": "Medium",
+    "high": "High",
+}
 
 
 # ==========================================
 # 1. CREATE REPORT
 # ==========================================
 
-@router.post("")
+@router.post("", status_code=201)
 def create_report(
     report: ReportCreate,
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
 ):
     try:
-        disaster_type_map = {
-    "flood": "Flood",
-    "storm": "Storm",
-    "landslide": "Landslide",
-    "heatwave": "Heatwave",
-    "other": "Other"
-}
-
-        severity_map = {
-    "low": "Low",
-    "moderate": "Medium",
-    "medium": "Medium",
-    "high": "High"
-}
-
         payload = {
-    "user_id": user["id"],
-    "title": report.title or f"{report.incident_type.title()} report",
-    "description": report.description,
-    "disaster_type": disaster_type_map[report.incident_type],
-    "location": report.location or (
-        f"{report.latitude}, {report.longitude}"
-    ),
-    "latitude": report.latitude,
-    "longitude": report.longitude,
-    "severity": severity_map.get(
-        (report.severity or "moderate").lower(),
-        "Medium"
-    )
-}
+            "user_id": user["id"],
+            "title": report.title or f"{report.incident_type.title()} report",
+            "description": report.description,
+            "disaster_type": DISASTER_TYPE_MAP[report.incident_type],
+            "location": report.location or (
+                f"{report.latitude}, {report.longitude}"
+            ),
+            "latitude": report.latitude,
+            "longitude": report.longitude,
+            "severity": SEVERITY_MAP.get(
+                (report.severity or "moderate").lower(),
+                "Medium",
+            ),
+        }
 
         result = (
             supabase.table("reports")
@@ -74,12 +80,12 @@ def create_report(
             "REPORT_CREATED",
             "report",
             created["id"],
-            {"incident_type": report.incident_type}
+            {"incident_type": report.incident_type},
         )
 
         return {
             "message": "Report submitted successfully",
-            "report": created
+            "report": created,
         }
 
     except HTTPException:
@@ -87,6 +93,8 @@ def create_report(
     except Exception:
         logger.exception("Report submission failed")
         raise HTTPException(500, "Report submission failed")
+
+
 # ==========================================
 # 2. GET MY REPORTS
 # ==========================================
@@ -105,6 +113,7 @@ def get_my_reports(user=Depends(get_current_user)):
         return {"reports": result.data or []}
 
     except Exception:
+        logger.exception("Could not retrieve user reports")
         raise HTTPException(500, "Could not retrieve reports")
 
 
@@ -115,7 +124,7 @@ def get_my_reports(user=Depends(get_current_user)):
 
 @router.get("/pending")
 def get_pending_reports(
-    user=Depends(require_roles("reviewer", "admin"))
+    user=Depends(require_roles("reviewer", "admin")),
 ):
     try:
         result = (
@@ -128,10 +137,11 @@ def get_pending_reports(
 
         return {
             "reports": result.data or [],
-            "total": len(result.data or [])
+            "total": len(result.data or []),
         }
 
     except Exception:
+        logger.exception("Could not retrieve pending reports")
         raise HTTPException(500, "Could not retrieve pending reports")
 
 
@@ -142,7 +152,7 @@ def get_pending_reports(
 
 @router.get("/all")
 def get_all_reports(
-    user=Depends(require_roles("reviewer", "admin"))
+    user=Depends(require_roles("reviewer", "admin")),
 ):
     try:
         result = (
@@ -154,15 +164,16 @@ def get_all_reports(
 
         return {
             "reports": result.data or [],
-            "total": len(result.data or [])
+            "total": len(result.data or []),
         }
 
     except Exception:
+        logger.exception("Could not retrieve all reports")
         raise HTTPException(500, "Could not retrieve reports")
 
 
 # ==========================================
-# 5. REVIEW / APPROVE / REJECT REPORT
+# 5. VERIFY / REJECT REPORT
 # REVIEWER / ADMIN ONLY
 # ==========================================
 
@@ -170,7 +181,7 @@ def get_all_reports(
 def verify_report(
     report_id: str,
     decision: ModerationDecision,
-    user=Depends(require_roles("reviewer", "admin"))
+    user=Depends(require_roles("reviewer", "admin")),
 ):
     try:
         existing = (
@@ -185,22 +196,19 @@ def verify_report(
             raise HTTPException(404, "Report not found")
 
         old_status = existing.data["status"]
+        new_status = decision.verification_status
 
-        if old_status == decision.verification_status:
+        if old_status == new_status:
             raise HTTPException(
                 409,
-                "Report already has this verification status"
+                "Report already has this verification status",
             )
 
         update_payload = {
-            "status": decision.verification_status,
+            "status": new_status,
             "verification_notes": decision.review_note,
-            "verified_at": (
-                datetime.now(timezone.utc).isoformat()
-                if decision.verification_status == "verified"
-                else None
-            ),
-            "verified_by": user["id"]
+            "verified_at": datetime.now(timezone.utc).isoformat(),
+            "verified_by": user["id"],
         }
 
         updated = (
@@ -220,15 +228,15 @@ def verify_report(
             report_id,
             {
                 "previous_status": old_status,
-                "new_status": decision.verification_status,
+                "new_status": new_status,
+                "reviewer_role": user["role"],
                 "review_note": decision.review_note,
-                "reviewer_role": user["role"]
-            }
+            },
         )
 
         return {
             "message": "Report review completed successfully",
-            "report": updated.data[0]
+            "report": updated.data[0],
         }
 
     except HTTPException:
@@ -236,6 +244,8 @@ def verify_report(
     except Exception:
         logger.exception("Report verification failed")
         raise HTTPException(500, "Report verification failed")
+
+
 # ==========================================
 # 6. GET INDIVIDUAL REPORT
 # ==========================================
@@ -243,7 +253,7 @@ def verify_report(
 @router.get("/{report_id}")
 def get_report(
     report_id: str,
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
 ):
     try:
         result = (
@@ -270,6 +280,7 @@ def get_report(
     except HTTPException:
         raise
     except Exception:
+        logger.exception("Could not retrieve report")
         raise HTTPException(500, "Could not retrieve report")
 
 
@@ -277,16 +288,18 @@ def get_report(
 # 7. UPLOAD REPORT MEDIA
 # ==========================================
 
-@router.post("/{report_id}/media")
+@router.post("/{report_id}/media", status_code=201)
 async def upload_report_media(
     report_id: str,
     file: UploadFile = File(...),
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
 ):
     storage_path = None
+    media_id = None
+    storage_uploaded = False
 
     try:
-        result = (
+        report_result = (
             supabase.table("reports")
             .select("id,user_id")
             .eq("id", report_id)
@@ -294,7 +307,7 @@ async def upload_report_media(
             .execute()
         )
 
-        report = result.data
+        report = report_result.data
 
         if not report:
             raise HTTPException(404, "Report not found")
@@ -302,19 +315,33 @@ async def upload_report_media(
         if report["user_id"] != user["id"]:
             raise HTTPException(
                 403,
-                "You cannot upload media to this report"
+                "You cannot upload media to this report",
             )
 
-        file_bytes = await file.read()
-        content_type = validate_image(file_bytes)
+        file_bytes = await file.read(MAX_FILE_SIZE + 1)
 
+        if not file_bytes:
+            raise HTTPException(400, "Empty image file")
+
+        if len(file_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                413,
+                "Image exceeds the 10 MB limit",
+            )
+
+        content_type = validate_image(file_bytes)
         image_hash = hashlib.sha256(file_bytes).hexdigest()
 
-        extension = {
+        extension_map = {
             "image/jpeg": "jpg",
             "image/png": "png",
-            "image/webp": "webp"
-        }[content_type]
+            "image/webp": "webp",
+        }
+
+        extension = extension_map.get(content_type)
+
+        if not extension:
+            raise HTTPException(415, "Unsupported image format")
 
         filename = f"{uuid.uuid4().hex}.{extension}"
         storage_path = f"{user['id']}/{report_id}/{filename}"
@@ -324,9 +351,11 @@ async def upload_report_media(
             file_bytes,
             {
                 "content-type": content_type,
-                "upsert": "false"
-            }
+                "upsert": "false",
+            },
         )
+
+        storage_uploaded = True
 
         media_result = (
             supabase.table("report_media")
@@ -334,35 +363,87 @@ async def upload_report_media(
                 "report_id": report_id,
                 "storage_path": storage_path,
                 "sha256": image_hash,
-                "media_type": content_type
+                "media_type": content_type,
             })
             .execute()
         )
 
         if not media_result.data:
-            supabase.storage.from_(BUCKET).remove([storage_path])
-            raise HTTPException(500, "Could not save media metadata")
+            raise HTTPException(
+                500,
+                "Could not save media metadata",
+            )
 
-        supabase.table("reports").update({
-            "processing_status": "queued"
-        }).eq("id", report_id).execute()
+        media_id = media_result.data[0]["id"]
+
+        queue_result = (
+            supabase.table("reports")
+            .update({"processing_status": "queued"})
+            .eq("id", report_id)
+            .execute()
+        )
+
+        if not queue_result.data:
+            raise HTTPException(
+                500,
+                "Could not queue report for AI processing",
+            )
 
         log_action(
             user["id"],
             "MEDIA_UPLOADED",
             "report",
             report_id,
-            {"media_type": content_type}
+            {
+                "media_type": content_type,
+                "sha256": image_hash,
+            },
         )
 
         return {
             "message": "Evidence image uploaded successfully",
-            "media": media_result.data[0]
+            "media": media_result.data[0],
+            "processing_status": "queued",
         }
 
     except HTTPException:
+        if storage_uploaded and storage_path:
+            try:
+                if media_id:
+                    (
+                        supabase.table("report_media")
+                        .delete()
+                        .eq("id", media_id)
+                        .execute()
+                    )
+
+                supabase.storage.from_(BUCKET).remove([storage_path])
+
+            except Exception:
+                logger.exception("Failed to clean up uploaded evidence")
+
         raise
+
     except Exception:
+        logger.exception("Image upload failed")
+
+        if storage_uploaded and storage_path:
+            try:
+                if media_id:
+                    (
+                        supabase.table("report_media")
+                        .delete()
+                        .eq("id", media_id)
+                        .execute()
+                    )
+
+                supabase.storage.from_(BUCKET).remove([storage_path])
+
+            except Exception:
+                logger.exception("Failed to clean up uploaded evidence")
+
         raise HTTPException(500, "Image upload failed")
+
     finally:
         await file.close()
+    
